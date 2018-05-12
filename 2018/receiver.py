@@ -97,6 +97,8 @@ class BogoReceiver(Receiver):
             if entry != None:
                 sys.stdout.write(entry['packet'][4:-4])
 
+        sys.exit()
+
 if __name__ == "__main__":
     # test out BogoReceiver
     rcvr = BogoReceiver()
