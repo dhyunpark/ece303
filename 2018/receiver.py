@@ -94,7 +94,8 @@ class BogoReceiver(Receiver):
                             'acked': False,
                         }
                         #create a checksum for the sequence number of the ACK corresponding to the received packet being sent back
-                        ack = bytearray(seqNum + checksum(seqNum))
+                        seqNum = int2bi(seqNum)
+                        ack = seqNum + checksum(seqNum)
                         #send ACK packet
                         self.simulator.u_send(ack)
                         rList[seqNum]['acked'] = True
