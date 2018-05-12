@@ -36,6 +36,19 @@ class BogoSender(Sender):
         
         biNum = ''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin,bytArr))])
         return int(biNum)
+    
+    def checksum(data):
+        sum1 = 0
+        sum2 = 0
+        i = 0
+        while i < len(data):
+            sum1 = (sum1 + ord(data[i]))%65535
+            sum2 = (sum2 + sum1)%65535
+            i+=1
+        x = sum1*65536 + sum2
+        checksum = bytearray.fromhex('{:08x}'.format(x))
+        pad = bytearray(32-len(checksum))
+        return pad + checksum
 
     def send(self, data):
         pDataSize = 1016 # + 4 bytes for seq number + 4 bytes for checksum
@@ -52,7 +65,7 @@ class BogoSender(Sender):
             # create components
             seqNum = bytearray([0x00, 0x00, 0x00, 0x00])            # dan will fix
             datachunk = data[i:upper]
-            chksum = int2bi(sum(datachunk))
+            chksum = checksum(datachunk)
             
             # combine components
             packet = seqNum + chksum + datachunk
@@ -87,7 +100,7 @@ class BogoSender(Sender):
                     while True:
                         
                         ack = self.simulator.u_receive()
-                        chksum = sum(ack[:4])
+                        chksum = checksum(ack[:4])
                         ack_chksum = bi2int(ack[-4:])
                         
                         if chksum == ack_chksum:
