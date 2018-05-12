@@ -45,15 +45,27 @@ class BogoReceiver(Receiver):
         return pad + checksum
 
     def int2bi(self, number):
-        #converts the sequence number to a 32bit/4byte binary value
-        biNum = bin(number)[2:].zfill(32)
-        #converts the binary value to a 4 length bytearray
+        #converts number to a 4 byte bytearray
         bytArr = bytearray([(a & 0xFF000000) >> 24, (a & 0xFF0000) >> 16, (a & 0xFF00) >> 8, (a & 0xFF)])
         return bytArr
 
     def bi2int(self, bytArr):
-        biNum = ''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))])
-        return int(biNum)
+        #converts a 4 byte bytearray to an integer
+        number = int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
+        return number
+
+    def checksum(data):
+        sum1 = 0
+        sum2 = 0
+        i = 0
+        while i < len(data):
+            sum1 = (sum1 + ord(data[i]))%65535
+            sum2 = (sum2 + sum1)%65535
+            i+=1
+        x = sum1*65536 + sum2
+        checksum = bytearray.fromhex('{:08x}'.format(x))
+        pad = bytearray(32-len(checksum))
+        return pad + checksum
 
     def receive(self):
         end = False
@@ -63,29 +75,31 @@ class BogoReceiver(Receiver):
         while True:
             try:
                 packet = self.simulator.u_receive()  # receive data
-                #if the packet size is smaller than 1024, then set end = True
-                #else:
-                self.logger.info("Got data from socket: {}".format(
-                    data.decode('ascii')))  # note that ASCII will only decode bytes in the range 0-127
 
-                #extract seqNum checksum and calculate data's checksum
-                seqNum = bi2int(packet[:3])
-                chkSum = bi2int(packet[-3:])
-                dataSum = INSERT THIS LATER
-
-                #if the data checksum is equal to calculated checksum, add to list of received packets and create an ACK packet
-                if dataSum == chkSum:
-                    rList[seqNum] = {
-                        'packet': bytearray(packet),
-                        'acked': False,
-                    }
-                    #create a checksum for the sequence number of the ACK corresponding to the received packet being sent back
-                    ack = bytearray(seqNum + sum(seqNum))
-                    #send ACK packet
-                    self.simulator.u_send(ack)
-                    rList[seqNum]['acked'] = True
+                if len(packet) < 1024:
+                    end = True  #denote the end of transmission
                 else:
-                    pass
+                    self.logger.info("Got data from socket: {}".format(
+                        data.decode('ascii')))  # note that ASCII will only decode bytes in the range 0-127
+
+                    #extract seqNum checksum and calculate data's checksum
+                    seqNum = bi2int(packet[:3])
+                    chkSum = bi2int(packet[-3:])
+                    dataSum = checksum(packet[4:-4])
+
+                    #if the data checksum is equal to calculated checksum, add to list of received packets and create an ACK packet
+                    if dataSum == chkSum:
+                        rList[seqNum] = {
+                            'packet': bytearray(packet),
+                            'acked': False,
+                        }
+                        #create a checksum for the sequence number of the ACK corresponding to the received packet being sent back
+                        ack = bytearray(seqNum + checksum(seqNum))
+                        #send ACK packet
+                        self.simulator.u_send(ack)
+                        rList[seqNum]['acked'] = True
+                    else:
+                        pass
 
             except socket.timeout:
                 if end:
