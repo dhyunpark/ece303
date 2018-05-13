@@ -24,18 +24,14 @@ class BogoSender(Sender):
         super(BogoSender, self).__init__(timeout=.01)
         
     def int2bi(self, number):
-        
-        #converts the sequence number to a 32bit/4byte binary value
-        biNum = bin(number)[2:].zfill(32)
-        
-        #converts the binary value to a 4 length bytearray
-        bytArr = bytearray([(a & 0xFF000000) >> 24, (a & 0xFF0000) >> 16, (a & 0xFF00) >> 8, (a & 0xFF)])
-        return bytArr
+            #converts number to a 4 byte bytearray
+            bytArr = bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
+            return bytArr
 
     def bi2int(self, bytArr):
-        
-        biNum = ''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin,bytArr))])
-        return int(biNum)
+        #converts a 4 byte bytearray to an integer
+        number = int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
+        return number
     
     def checksum(self, data):
         sum1 = 0
@@ -55,6 +51,7 @@ class BogoSender(Sender):
         pDataSize = 1016 # + 4 bytes for seq number + 4 bytes for checksum
         plist = []
         windSize = 10
+        count = 0
         
         # create list of packets
         for i in xrange(0, len(data), pDataSize):
@@ -64,12 +61,12 @@ class BogoSender(Sender):
                 upper = len(data)
             
             # create components
-            seqNum = bytearray([0x00, 0x00, 0x00, 0x00])            # dan will fix
+            seqNum = seqNum = int2bi(count)
             datachunk = data[i:upper]
-            chksum = self.checksum(datachunk)
+            chksum = int2bi(sum(datachunk))
             
             # combine components
-            packet = seqNum + chksum + datachunk
+            packet = seqNum + datachunk + chksum
             
             # add packet to packet list
             plist.append({
@@ -77,6 +74,8 @@ class BogoSender(Sender):
                 "ack": False,
                 "sent": False
             })
+            
+            count += 1
             
         lower = 0
         upper = 0
@@ -95,8 +94,9 @@ class BogoSender(Sender):
                         
                     for i in xrange(lower, upper):
                         if not plist[i]['sent']:
-                            self.simulator.u_send(plist[i]['packet'])
-                            plist[i]['sent'] = True
+                            if not plist[i]['ack']:
+                                self.simulator.u_send(plist[i]['packet'])
+                                plist[i]['sent'] = True
                             
                     while True:
                         
@@ -109,14 +109,15 @@ class BogoSender(Sender):
                             seqNum = ack[:4]
                             plist[seqNum]['ack'] = True
                             
-                            if seqNum == plist[upper - 1]['packet'][0]:
+                            if seqNum == plist[upper - 1]['packet'][:4]:
                                 break
-                                
+                           
                     for i in xrange(lower, upper):
-                        if not plist[i]['ack']:
-                            break                             
-                        else:
+                        if plist[i]['ack']:
                             lower += windSize
+                            break
+                        
+
                 
             except socket.timeout:
                 
