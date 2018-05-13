@@ -100,7 +100,6 @@ class BogoReceiver(Receiver):
                         }
                         #send ACK packet
                         self.simulator.u_send(ack)
-                        print ack
                         rList[seqNum%300]['acked'] = True
                     '''
                     #if the entries fill up the dictionary then flush to output and delete first half of dictionary
