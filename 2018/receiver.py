@@ -58,12 +58,12 @@ class BogoReceiver(Receiver):
         i = 0
         data = str(data)
         while i < len(data):
-            sum1 = (sum1 + ord(data[i]))%65535
-            sum2 = (sum2 + sum1)%65535
+            sum1 = (sum1 + ord(data[i]))%3
+            sum2 = (sum2 + sum1)%3
             i+=1
-        x = sum1*65536 + sum2
+        x = sum1*4 + sum2
         checksum = bytearray.fromhex('{:08x}'.format(x))
-        pad = bytearray(32-len(checksum))
+        pad = bytearray(4-len(checksum))
         return pad + checksum
 
     def receive(self):
