@@ -6,6 +6,7 @@ import channelsimulator
 import utils
 import sys
 import zlib
+import string
 
 class Sender(object):
 
@@ -24,14 +25,12 @@ class BogoSender(Sender):
         super(BogoSender, self).__init__(timeout=.01)
 
     def int2bi(self, number):
-            #converts number to a 4 byte bytearray
-            bytArr = bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
-            return bytArr
+        #converts number to a 4 byte bytearray
+        return bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
 
     def bi2int(self, bytArr):
         #converts a 4 byte bytearray to an integer
-        number = int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
-        return number
+        return int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
 
     def checksum(self, data):
         sum1 = 0
@@ -61,7 +60,8 @@ class BogoSender(Sender):
                 upper = len(data)
 
             # create components
-            seqNum = seqNum = self.int2bi(count)
+            seqNum = self.int2bi(count)
+            count += 1
             datachunk = data[i:upper]
             chksum = self.checksum(datachunk)
 
@@ -74,8 +74,6 @@ class BogoSender(Sender):
                 "ack": False,
                 "sent": False
             })
-
-            count += 1
 
         lower = 0
         upper = 0
@@ -107,7 +105,7 @@ class BogoSender(Sender):
                         if chksum == ack_chksum:
 
                             seqNum = ack[:4]
-                            plist[seqNum]['ack'] = True
+                            plist[bi2int(seqNum)]['ack'] = True
 
                             if seqNum == plist[upper - 1]['packet'][:4]:
                                 break

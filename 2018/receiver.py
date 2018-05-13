@@ -27,30 +27,15 @@ class Receiver(object):
 class BogoReceiver(Receiver):
 
     def __init__(self):
-        super(BogoReceiver, self).__init__(timeout=3)
-
-    def checksum(data):
-        sum1 = 0
-        sum2 = 0
-        i = 0
-        while i < len(data):
-            sum1 = (sum1 + ord(data[i]))%65535
-            sum2 = (sum2 + sum1)%65535
-            i+=1
-        x = sum1*65536 + sum2
-        checksum = bytearray.fromhex('{:08x}'.format(x))
-        pad = bytearray(32-len(checksum))
-        return pad + checksum
+        super(BogoReceiver, self).__init__(timeout=0.01)
 
     def int2bi(self, number):
         #converts number to a 4 byte bytearray
-        bytArr = bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
-        return bytArr
+        return bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
 
     def bi2int(self, bytArr):
         #converts a 4 byte bytearray to an integer
-        number = int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
-        return number
+        return int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
 
     def checksum(self, data):
         sum1 = 0
@@ -76,23 +61,25 @@ class BogoReceiver(Receiver):
         while True:
             try:
                 packet = self.simulator.u_receive()  # receive data
-                print len(packet)
                 '''
                 if len(packet) < 1024:
                     end = True  #denote the end of transmission
                     print "end set to true"
                 '''
                 #extract seqNum checksum and calculate data's checksum
-                seqNum = self.bi2int(packet[:3])
+                seqNum = self.bi2int(packet[:4])
                 chkSum = self.bi2int(packet[-4:])
-                dataSum = self.checksum(packet[4:-5])
+                print seqNum
+
+                dataSum = self.checksum(packet[4:-4])
+                dataSum = self.bi2int(dataSum)
 
                 #if the data checksum is equal to calculated checksum. if corrupted, pass
                 if dataSum == chkSum:
                     print "not corrupted"
                     #create a checksum for the sequence number of the ACK corresponding to the received packet being sent back
                     ackNum = self.int2bi(seqNum)
-                    ack = seqNum + self.checksum(ackNum)
+                    ack = ackNum + self.checksum(ackNum)
 
                     if (seqNum % 300) == 149 and len(rList) == 300:
                         print "deleting 151 to 300"
@@ -102,24 +89,29 @@ class BogoReceiver(Receiver):
                     #if the packet has been received and acked already, then pass on the packet and retransmit ack
                     if (seqNum%300) in rList:
                         if rList[seqNum%300]['acked']:
+                            print "sending duplicate ack"
                             self.simulator.u_send(ack)
 
                     else: #if new packet, create an entry, and send ack
+                        print "adding new packet"
                         rList[seqNum%300] = {
                             'packet': packet,
                             'acked': False,
                         }
                         #send ACK packet
                         self.simulator.u_send(ack)
+                        print ack
                         rList[seqNum%300]['acked'] = True
-
+                    '''
                     #if the entries fill up the dictionary then flush to output and delete first half of dictionary
                     if len(rList) == 300:
                         for entry in rList:
                             sys.stdout.write(rList[entry]['packet'][4:-5])
                         for i in xrange(0, 149):
                             del rList[i]
+                    '''
                 else:
+                    print "it's corrupted"
                     pass
 
             except socket.timeout:
