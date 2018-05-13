@@ -6,7 +6,6 @@ import channelsimulator
 import utils
 import sys
 import zlib
-import string
 
 class Sender(object):
 
@@ -23,25 +22,27 @@ class BogoSender(Sender):
 
     def __init__(self):
         super(BogoSender, self).__init__(timeout=.01)
-
+        
     def int2bi(self, number):
-        #converts number to a 4 byte bytearray
-        return bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
+            #converts number to a 4 byte bytearray
+            bytArr = bytearray([(number & 0xFF000000) >> 24, (number & 0xFF0000) >> 16, (number & 0xFF00) >> 8, (number & 0xFF)])
+            return bytArr
 
     def bi2int(self, bytArr):
         #converts a 4 byte bytearray to an integer
-        return int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
-
+        number = int(''.join([string.zfill(s,8) for s in map(lambda n : n[2:], map(bin, bytArr))]), 2)
+        return number
+    
     def checksum(self, data):
         sum1 = 0
         sum2 = 0
         i = 0
         data = str(data)
         while i < len(data):
-            sum1 = (sum1 + ord(data[i]))%3
-            sum2 = (sum2 + sum1)%3
+            sum1 = (sum1 + ord(data[i]))%65535
+            sum2 = (sum2 + sum1)%65535
             i+=1
-        x = sum1*4 + sum2
+        x = sum1*65536 + sum2
         checksum = bytearray.fromhex('{:08x}'.format(x))
         pad = bytearray(4-len(checksum))
         return pad + checksum
@@ -51,33 +52,34 @@ class BogoSender(Sender):
         plist = []
         windSize = 10
         count = 0
-
+        
         # create list of packets
         for i in xrange(0, len(data), pDataSize):
             upper = i + pDataSize
-
+            
             if upper > len(data):
                 upper = len(data)
-
+            
             # create components
-            seqNum = self.int2bi(count)
-            count += 1
+            seqNum = seqNum = int2bi(count)
             datachunk = data[i:upper]
-            chksum = self.checksum(datachunk)
-
+            chksum = checksum(datachunk)
+            
             # combine components
             packet = seqNum + datachunk + chksum
-
+            
             # add packet to packet list
             plist.append({
                 "packet": bytearray(packet),
                 "ack": False,
                 "sent": False
             })
-
+            
+            count += 1
+            
         lower = 0
         upper = 0
-
+        
         # check window size at end of data
         numPackets = len(plist)
         if numPackets < windSize:
@@ -86,39 +88,35 @@ class BogoSender(Sender):
         while True:
             try:
                     upper = lower + windSize
-
+                    
                     if upper > numPackets:
                         upper = numPackets
-
+                        
                     for i in xrange(lower, upper):
                         if not plist[i]['sent']:
-                            if not plist[i]['ack']:
-                                self.simulator.u_send(plist[i]['packet'])
-                                plist[i]['sent'] = True
-
+                            self.simulator.u_send(plist[i]['packet'])
+                            plist[i]['sent'] = True
+                            
                     while True:
-
+                        
                         ack = self.simulator.u_receive()
                         chksum = self.checksum(ack[:4])
                         ack_chksum = self.bi2int(ack[-4:])
-
+                        
                         if chksum == ack_chksum:
-
+                            
                             seqNum = ack[:4]
                             plist[bi2int(seqNum)]['ack'] = True
-
+                            
                             if seqNum == plist[upper - 1]['packet'][:4]:
                                 break
-
-                    for i in xrange(lower, upper):
-                        if plist[i]['ack']:
+                           
+                        if False not in plist[lower:upper]['ack']:
                             lower += windSize
                             break
-
-
-
+                        
             except socket.timeout:
-
+                
                 for i in xrange(lower, upper):
                     if not plist[i]['ack']:
                         self.simulator.u_send(plist[i]['packet'])
